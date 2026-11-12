@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PID Control from Zero</title>
+<style>
+  @page { size: A4; margin: 18mm 18mm 17mm 18mm;
+          @top-center { content: "PID Control from Zero"; font: italic 8pt Cambria, Georgia, serif; color: #555; }
+          @bottom-center { content: counter(page); font: 8.5pt Cambria, Georgia, serif; color: #333; } }
+  @page :first { @top-center { content: none; } }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: Cambria, "Times New Roman", Georgia, serif; font-size: 10pt; line-height: 1.32;
+         color: #111; background: #fff; margin: 0; text-align: justify; hyphens: auto; }
+  h1 { font-size: 20pt; font-weight: 700; text-align: center; margin: 2mm 0 1.5mm; letter-spacing: 0.1px; }
+  .sub { text-align: center; font-style: italic; font-size: 10.5pt; color: #333; margin-bottom: 2.5mm; }
+  .meta { text-align: center; font-size: 8.8pt; color: #222; margin: 0 8mm 4mm; padding-bottom: 3mm;
+          border-bottom: 0.6pt solid #000; line-height: 1.4; }
+  .meta + p { font-size: 9.2pt; margin: 0 9mm 3mm; }
+  .meta + p > b:first-child { font-variant: small-caps; letter-spacing: 0.4px; }
+  h2 { font-size: 12pt; font-weight: 700; margin: 5mm 0 1.8mm; text-align: left; break-after: avoid; }
+  h2 .n { display: inline-block; min-width: 6mm; font-weight: 700; }
+  h3 { font-size: 10.4pt; font-style: italic; font-weight: 700; margin: 3mm 0 1.2mm; text-align: left; break-after: avoid; }
+  p { margin: 0 0 1.8mm; }
+  ul, ol { margin: 0 0 1.8mm; padding-left: 6mm; }
+  li { margin: 0 0 0.6mm; }
+  .box { padding: 1.4mm 3mm; margin: 2mm 0 2.4mm; break-inside: avoid; font-size: 9.3pt; }
+  .kw  { border-top: 0.6pt solid #000; border-bottom: 0.6pt solid #000; padding: 1.4mm 1mm; }
+  .kw b:first-child { font-variant: small-caps; letter-spacing: 0.3px; }
+  .eg  { border-left: 1.4pt solid #999; padding-left: 3mm; }
+  .why { border-left: 1.4pt solid #222; padding-left: 3mm; background: #f6f6f6; }
+  .ok  { border-left: 1.4pt solid #777; padding-left: 3mm; background: #f6f6f6; }
+  .formula { font-family: "Cambria Math", Cambria, serif; font-size: 11pt; text-align: center; padding: 1.2mm 0;
+             margin: 2mm 0 2.4mm; break-inside: avoid; }
+  .formula small { font-family: Cambria, serif; font-size: 8.4pt; color: #444; display: block; margin-top: 0.8mm; font-style: italic; }
+  table { border-collapse: collapse; width: 100%; margin: 2mm 0 3mm; font-size: 8.9pt; break-inside: avoid;
+          border-top: 1pt solid #000; border-bottom: 1pt solid #000; text-align: left; }
+  th, td { padding: 0.7mm 1.8mm; vertical-align: top; }
+  th { font-weight: 700; border-bottom: 0.6pt solid #000; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.best td { font-weight: 700; }
+  figure { margin: 2.2mm 0 3mm; break-inside: avoid; text-align: center; }
+  figure img { width: 100%; display: block; }
+  figure.narrow img { width: 88%; margin: 0 auto; }
+  figcaption { font-size: 8.8pt; color: #111; text-align: justify; margin: 1mm 2mm 0; line-height: 1.3; }
+  figcaption b { font-weight: 700; }
+  pre { font-family: Consolas, "Courier New", monospace; font-size: 7.4pt; line-height: 1.28; text-align: left;
+        border-top: 0.6pt solid #000; border-bottom: 0.6pt solid #000; padding: 1.6mm 1mm; margin: 2mm 0 2.4mm;
+        white-space: pre; break-inside: avoid; }
+  code { font-family: Consolas, monospace; font-size: 8.4pt; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+  .two > div { break-inside: avoid; }
+  .two .box { margin-top: 0; }
+  .two li, td { text-align: left; }
+  .small { font-size: 8.8pt; }
+  .muted { color: #444; }
+  p.small.muted:last-child { border-top: 0.6pt solid #000; padding-top: 1.6mm; margin-top: 3mm; }
+</style>
+</head>
+<body>
+
+<h1>PID Control from Zero</h1>
+<div class="sub">A beginner's guide: simple idea → everyday example → formula → graph from my own Python simulation</div>
+<div class="meta">Author: <b>[Your name]</b> &nbsp;·&nbsp; Physical AI intern assignment, Modern Monk Labs &nbsp;·&nbsp; November 2026
+ &nbsp;·&nbsp; Code: <b>[GitHub link]</b> (NumPy + Matplotlib only; PID and simulator written by hand; <code>python run_all.py</code> recreates every graph and number)</div>
+
+<p><b>How to read this.</b> Every section follows the same pattern: a simple idea, an everyday example, the formula
+(every symbol explained), a graph, then what the graph shows <i>in numbers</i>. New words are explained in a blue
+<b>Key words</b> box the first time they appear. Every number in this document comes from running the code.</p>
+
+<!-- ======================================================= 1 -->
+<h2><span class="n">1</span>The basic idea</h2>
+<p><b>Simple idea.</b> A controller is a loop that repeats four steps, many times per second:
+<b>look</b> (measure where you are), <b>compare</b> (how far from the target?), <b>act</b> (push to shrink the gap), <b>repeat</b>.
+It never needs to know the full physics. It only reacts to the gap.</p>
+<div class="box eg"><b>Everyday example — the shower.</b> You want 38 °C. The water feels cold, so you turn the tap towards hot.
+You feel again: now a bit too hot, so you turn it back a little. After a few rounds it feels right.
+Your hand is the <i>controller</i>, the tap and pipes are the <i>machine</i>, your skin is the <i>sensor</i>.</div>
+<div class="formula">error &nbsp; e = r − y &nbsp;&nbsp;&nbsp; (target − measured value)
+<small>r = target (setpoint), y = measured value. If e &gt; 0 we are short of the target; if e &lt; 0 we went past it.</small></div>
+<figure class="narrow"><img src="../figures/fig01_loop.png" alt="Feedback loop diagram">
+<figcaption><b>Figure 1.</b> The loop: target → compare → controller → machine → sensor → back to compare. The controller only ever sees the error.</figcaption></figure>
+<div class="box kw"><b>Key words.</b> <b>Setpoint / target (r)</b>: the value we want. <b>Plant</b>: the machine being controlled.
+<b>Sensor</b>: measures the actual value (y). <b>Error (e)</b>: target minus measured value. <b>Feedback</b>: sending the
+measurement back so the controller can correct itself. <b>Open loop</b>: acting <i>without</i> measuring (e.g. setting the tap once and walking away).</div>
+<p><b>Why feedback?</b> Open loop only works if you know the machine perfectly. If the boiler gets hotter, a tap set once
+gives the wrong temperature and never notices. Feedback notices and corrects. Section 3 shows this with numbers.</p>
+
+<!-- ======================================================= 2 -->
+<h2><span class="n">2</span>The PID formula</h2>
+<p><b>Simple idea.</b> PID is three helpers. Each looks at the error in a different way, and their pushes are added up.</p>
+<div class="box eg"><b>Everyday example — stopping a car at a line.</b>
+<b>P</b> asks "how far is the line <i>now</i>?" (far → press harder).
+<b>I</b> asks "how long have I been short of it?" (a long time → add more).
+<b>D</b> asks "how fast am I closing in?" (fast → brake early so I don't roll past).</div>
+<div class="formula">u(t) = K<sub>p</sub>·e(t) &nbsp;+&nbsp; K<sub>i</sub>·∫<sub>0</sub><sup>t</sup> e(τ) dτ &nbsp;+&nbsp; K<sub>d</sub>·de(t)/dt
+<small>P part (present) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; I part (past) &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; D part (trend)</small></div>
+<table>
+<tr><th>Symbol</th><th>Meaning</th><th>Unit (for our block)</th></tr>
+<tr><td>u(t)</td><td>controller output: the push sent to the motor</td><td>N (newton)</td></tr>
+<tr><td>e(t)</td><td>error = target − measured position</td><td>m</td></tr>
+<tr><td>∫e dt</td><td>"integral": the area under the error curve so far = error added up over time</td><td>m·s</td></tr>
+<tr><td>de/dt</td><td>"derivative": how fast the error is changing (its slope)</td><td>m/s</td></tr>
+<tr><td>K<sub>p</sub></td><td>proportional gain: newtons of push per metre of error</td><td>N/m</td></tr>
+<tr><td>K<sub>i</sub></td><td>integral gain: newtons per (metre × second) of built-up error</td><td>N/(m·s)</td></tr>
+<tr><td>K<sub>d</sub></td><td>derivative gain: newtons per (metre/second) of error change</td><td>N·s/m</td></tr>
+<tr><td>t, dt</td><td>time, and the small time step between computer updates</td><td>s</td></tr>
+</table>
+<ul>
+<li><b>P (present error)</b> pushes in proportion to the gap now. Strong and simple, but (Section 5) it always stops a little short.</li>
+<li><b>I (past error)</b> keeps adding up the gap. As long as <i>any</i> gap remains, its push grows. So it removes the last bit of error. Too much I causes bouncing.</li>
+<li><b>D (rate of change)</b> reacts to the error's speed. When the block rushes towards the target, the error shrinks fast, so D pushes back: it acts like a brake.</li>
+</ul>
+<figure><img src="../figures/fig02_pid_terms.png" alt="What P, I and D look at">
+<figcaption><b>Figure 2.</b> Left: at t* = 0.12 s, P sees 0.522 m, I sees an area of 0.099 m·s, D sees a slope of −5.98 m/s.
+Right: the computer only has samples, so I becomes a sum of thin rectangles and D becomes "change ÷ time step".</figcaption></figure>
+<p><b>The step-by-step version a computer runs.</b> A computer cannot do smooth calculus. Every dt seconds it does this:</p>
+<pre>every dt seconds:
+    error      = target - measured                 # how far are we?
+    integral   = integral + error * dt             # add one thin rectangle to the area (I)
+    derivative = (error - previous_error) / dt     # change since last time, per second (D)
+    u          = Kp*error + Ki*integral + Kd*derivative
+    previous_error = error                         # remember for next time
+    send u to the motor</pre>
+<div class="box kw"><b>Key words.</b> <b>Gain</b>: how strongly a part reacts (a multiplier). <b>Integral</b>: running total (area) of the error.
+<b>Derivative</b>: rate of change (slope). <b>Time step dt</b>: time between two controller updates; we use dt = 1 ms.</div>
+
+<!-- ======================================================= 3 -->
+<h2><span class="n">3</span>The test system</h2>
+<p><b>Simple idea.</b> We control a 1 kg block attached to a wall by a spring and a damper. The motor pushes the block. We want it to sit at x = 1 m.</p>
+<div class="box eg"><b>Everyday example — car suspension.</b> The coil spring pushes the car body back to its rest height; the shock absorber
+(damper) resists fast movement so the car does not keep bouncing.</div>
+<p>Newton's second law says: <i>mass × acceleration = sum of forces</i>. Three forces act: the motor push u, the spring pulling back (k·x),
+and the damper resisting speed (c·ẋ):</p>
+<div class="formula">m·ẍ + c·ẋ + k·x = u &nbsp;&nbsp;&nbsp; with &nbsp; m = 1 kg, &nbsp; c = 10 N·s/m, &nbsp; k = 20 N/m
+<small>x = position [m], ẋ = velocity [m/s], ẍ = acceleration [m/s²], u = motor force [N]</small></div>
+<p><b>Why a constant push is needed to hold 1 m.</b> When the block is resting, it does not move (ẋ = 0) and does not speed up (ẍ = 0).
+The equation becomes <b>k·x = u</b>, so u = 20 N/m × 1 m = <b>20 N</b>. The spring is stretched and pulls back with 20 N; if the motor
+stops pushing, the spring pulls the block back to 0. Like holding a door open against a door-closer: you must keep pushing even when nothing moves.</p>
+<figure><img src="../figures/fig03_test_system.png" alt="Constant push test">
+<figcaption><b>Figure 3.</b> With no controller, a constant push of 10, 20, 30 N leaves the block at 0.500, 1.000, 1.500 m = u/k, matching the
+calculation exactly; it takes 1.59 s to settle. Right: the spring force rises until it equals the 20 N push.</figcaption></figure>
+<div class="box why"><b>So why not just push 20 N forever?</b> (1) It is slow: 1.59 s. (2) It only works if we know k exactly. If the spring were
+25 N/m, 20 N would leave the block at 0.8 m and nothing would notice. A feedback controller measures and corrects, so it fixes both.</div>
+<div class="box kw"><b>Key words.</b> <b>Spring constant k</b>: newtons of pull per metre of stretch. <b>Damper c</b>: newtons of resistance per m/s of speed
+(like moving a spoon through honey). <b>Steady state / at rest</b>: when everything has stopped changing. <b>Step response</b>: how the system moves
+when the target suddenly jumps (here 0 → 1 m).</div>
+<p class="small muted"><b>How we simulate it:</b> the code (<code>pid_control/plant.py</code>) moves the block forward in 1 ms steps using the
+Runge–Kutta 4 method (it checks the slope 4 times inside each step and averages them; far more accurate than one simple step).</p>
+
+<!-- ======================================================= 4 -->
+<h2><span class="n">4</span>How to judge a result</h2>
+<p><b>Simple idea.</b> A good response is <b>fast</b>, does <b>not go too far past</b> the target, <b>calms down soon</b>, and <b>ends in the right place</b>.</p>
+<div class="box eg"><b>Everyday example — a lift.</b> It should reach your floor quickly (rise time), not go past it and come back (overshoot),
+stop wobbling soon (settling time), and line up exactly with the floor (steady-state error).</div>
+<table>
+<tr><th>Measure</th><th>Definition</th><th>Unit</th></tr>
+<tr><td>① Rise time t<sub>r</sub></td><td>time to go from 10 % to 90 % of the final value</td><td>s</td></tr>
+<tr><td>② Overshoot OS</td><td>(peak − final value) ÷ final value × 100</td><td>%</td></tr>
+<tr><td>③ Settling time t<sub>s</sub></td><td>time after which the response stays inside ±2 % of the final value</td><td>s</td></tr>
+<tr><td>④ Steady-state error e<sub>ss</sub></td><td>target − final value (where it finally stops)</td><td>m</td></tr>
+</table>
+<figure><img src="../figures/fig04_metrics.png" alt="Four measures marked">
+<figcaption><b>Figure 4.</b> P-only control (K<sub>p</sub> = 100): rise 0.142 s, overshoot 20.2 %, settles in 0.761 s, stops 0.167 m short.</figcaption></figure>
+<div class="box why"><b>Surprise:</b> the peak is 1.001 m (barely past the target), yet overshoot is 20.2 %. Why? Overshoot is measured from
+the <i>final value</i> (0.833 m), not from the target: (1.001 − 0.833) ÷ 0.833 = 20.2 %. The real problem here is the 0.167 m gap.</div>
+
+<!-- ======================================================= 5 -->
+<h2><span class="n">5</span>Each part alone</h2>
+<h3>5.1 &nbsp;P only — and why it always stops short</h3>
+<p><b>Simple idea.</b> Push harder the further you are from the target. <b>Example:</b> pressing the accelerator harder the further your speed is below the limit.</p>
+<p><b>Calculation (where it stops).</b> At rest, ẋ = ẍ = 0, so the motor push must equal the spring force:</p>
+<div class="formula">k·x = K<sub>p</sub>·(1 − x) &nbsp;⇒&nbsp; x<sub>ss</sub> = K<sub>p</sub> / (K<sub>p</sub> + k), &nbsp;&nbsp; e<sub>ss</sub> = k / (K<sub>p</sub> + k) = 20 / (K<sub>p</sub> + 20)
+<small>e<sub>ss</sub> can only be zero if K<sub>p</sub> is infinite. P needs some error to make any push, so some error must remain.</small></div>
+<p><b>Calculation (how much it bounces).</b> Putting u = K<sub>p</sub>(1 − x) into the block's equation gives
+ẍ + 10ẋ + (20 + K<sub>p</sub>)x = K<sub>p</sub>. So K<sub>p</sub> acts like a <i>stiffer spring</i>, but the damper stays the same.
+The <b>damping ratio</b> ζ = c / (2√(m(k + K<sub>p</sub>))) tells us how bouncy it is (ζ ≥ 1: no bounce; small ζ: lots of bounce);
+predicted overshoot = e<sup>−πζ/√(1−ζ²)</sup> × 100 %.</p>
+<table>
+<tr><th class="num">K<sub>p</sub> [N/m]</th><th class="num">x<sub>ss</sub> theory [m]</th><th class="num">x<sub>ss</sub> simulated</th><th class="num">e<sub>ss</sub> [m]</th><th class="num">ζ</th><th class="num">OS theory</th><th class="num">OS simulated</th></tr>
+<tr><td class="num">10</td><td class="num">0.3333</td><td class="num">0.3334</td><td class="num">0.667</td><td class="num">0.913</td><td class="num">0.09 %</td><td class="num">0.08 %</td></tr>
+<tr><td class="num">30</td><td class="num">0.6000</td><td class="num">0.6000</td><td class="num">0.400</td><td class="num">0.707</td><td class="num">4.32 %</td><td class="num">4.35 %</td></tr>
+<tr><td class="num">100</td><td class="num">0.8333</td><td class="num">0.8333</td><td class="num">0.167</td><td class="num">0.456</td><td class="num">19.96 %</td><td class="num">20.17 %</td></tr>
+<tr><td class="num">300</td><td class="num">0.9375</td><td class="num">0.9375</td><td class="num">0.063</td><td class="num">0.280</td><td class="num">40.07 %</td><td class="num">40.67 %</td></tr>
+</table>
+<figure><img src="../figures/fig05a_P.png" alt="P only">
+<figcaption><b>Figure 5a.</b> Raising K<sub>p</sub> from 10 to 300 shrinks the gap from 0.667 m to 0.063 m but raises overshoot from 0.1 % to 40.7 %. Dots (simulation) sit on the theory curve.</figcaption></figure>
+<div class="box kw"><b>Key words.</b> <b>Damping ratio ζ</b> ("zeta"): one number for how bouncy a system is. ζ = 0: bounces forever;
+ζ = 0.7: one small overshoot (about 4 %); ζ ≥ 1: no overshoot at all. <b>Steady-state error e<sub>ss</sub></b>: the gap left once everything stops moving.</div>
+<div class="box ok"><b>Check:</b> stopping point matches theory to 4 decimals; overshoot within 0.6 percentage points. The tiny overshoot gap comes
+from the 1 ms update: the controller always reacts ~0.5 ms late, which slightly reduces damping (at a 0.1 ms update the gap shrinks to 0.06 points; see 7d).</div>
+
+<h3>5.2 &nbsp;Adding I — removing the last gap</h3>
+<p><b>Simple idea.</b> I remembers. While any gap remains, its push keeps growing. <b>Example:</b> cruise control on a hill slowly adds throttle until the speed is exactly right.</p>
+<p><b>Calculation.</b> At rest, the I part can only stop changing if the error is <b>exactly zero</b> (otherwise ∫e dt keeps growing). With zero error, P gives 0 N,
+so the I part alone must supply the full spring force: <b>K<sub>i</sub>·∫e dt = k × 1 m = 20 N</b>.</p>
+<figure><img src="../figures/fig05b_PI.png" alt="Adding I">
+<figcaption><b>Figure 5b.</b> K<sub>p</sub> = 100. With K<sub>i</sub> = 200 the gap goes from 0.167 m to 0.000 m and the I part ends at exactly 20.00 N, as calculated.
+The price is bounce: overshoot 20.2 % → 22.3 % (K<sub>i</sub> = 200) → 49.1 % (K<sub>i</sub> = 500). K<sub>i</sub> = 50 is too slow: still 0.026 m short after 4 s.</figcaption></figure>
+<div class="box why"><b>Why I adds bounce:</b> the I part only starts shrinking <i>after</i> the error turns negative, i.e. after the block has already passed the
+target. So it always pushes a bit too long, like a heavy flywheel that keeps spinning after you let go.</div>
+
+<h3>5.3 &nbsp;Adding D — the brake</h3>
+<p><b>Simple idea.</b> D pushes against fast motion. <b>Example:</b> on a bicycle you squeeze the brakes <i>before</i> the stop line, harder the faster you are going.</p>
+<p><b>Calculation.</b> The target is fixed, so the error changes only because the block moves: de/dt = −ẋ. The D part is then −K<sub>d</sub>·ẋ, which is exactly a damper force. So:</p>
+<div class="formula">ẍ + (c + K<sub>d</sub>)·ẋ + (k + K<sub>p</sub>)·x = K<sub>p</sub> &nbsp;⇒&nbsp; ζ = (c + K<sub>d</sub>) / (2√(m(k + K<sub>p</sub>)))
+<small>D adds K<sub>d</sub> to the damper. At rest ẋ = 0, so D does not change where the block stops (still 0.0625 m short with K<sub>p</sub> = 300).</small></div>
+<table>
+<tr><th class="num">K<sub>d</sub> [N·s/m]</th><th class="num">0</th><th class="num">5</th><th class="num">10</th><th class="num">20</th></tr>
+<tr><td>ζ (K<sub>p</sub> = 300)</td><td class="num">0.280</td><td class="num">0.419</td><td class="num">0.559</td><td class="num">0.839</td></tr>
+<tr><td>overshoot, theory</td><td class="num">40.07 %</td><td class="num">23.44 %</td><td class="num">12.03 %</td><td class="num">0.79 %</td></tr>
+<tr><td>overshoot, simulated</td><td class="num">40.67 %</td><td class="num">23.75 %</td><td class="num">12.12 %</td><td class="num">0.73 %</td></tr>
+<tr><td>settling time, simulated</td><td class="num">0.777 s</td><td class="num">0.469 s</td><td class="num">0.326 s</td><td class="num">0.229 s</td></tr>
+</table>
+<figure><img src="../figures/fig05c_PD.png" alt="Adding D">
+<figcaption><b>Figure 5c.</b> K<sub>d</sub> from 0 to 20 raises ζ from 0.28 to 0.84: overshoot 40.7 % → 0.7 % and settling 0.78 s → 0.23 s. Simulation dots sit on the theory curve.</figcaption></figure>
+
+<!-- ======================================================= 6 -->
+<h2><span class="n">6</span>All together</h2>
+<p><b>Simple idea.</b> Each part fixes one weakness: P gives speed, I removes the final gap, D removes the bounce. We now compare them fairly:
+all four use the same K<sub>p</sub> = 300, then add I and/or D.</p>
+<figure><img src="../figures/fig06_compare.png" alt="P PI PD PID compared">
+<figcaption><b>Figure 6.</b> PID is the only one that does well on all four measures: low overshoot (0.5 %), fast settling (0.24 s) and no final gap. P and PI rise faster but bounce; PD settles slightly faster but stops short. Right: zoom shows P and PD stuck at 0.9375 m and PI still swinging after 1.5 s.</figcaption></figure>
+<table>
+<tr><th>Controller (gains)</th><th class="num">Rise time</th><th class="num">Overshoot</th><th class="num">Settling time</th><th class="num">Steady-state error</th></tr>
+<tr><td>P &nbsp;(K<sub>p</sub>=300)</td><td class="num">0.072 s</td><td class="num">40.67 %</td><td class="num">0.776 s</td><td class="num">0.0625 m</td></tr>
+<tr><td>PI (K<sub>p</sub>=300, K<sub>i</sub>=200)</td><td class="num">0.074 s</td><td class="num">36.98 %</td><td class="num">1.219 s</td><td class="num">0.0003 m</td></tr>
+<tr><td>PD (K<sub>p</sub>=300, K<sub>d</sub>=20)</td><td class="num">0.146 s</td><td class="num">0.73 %</td><td class="num">0.229 s</td><td class="num">0.0625 m</td></tr>
+<tr class="best"><td>PID (K<sub>p</sub>=300, K<sub>i</sub>=200, K<sub>d</sub>=20)</td><td class="num">0.153 s</td><td class="num">0.49 %</td><td class="num">0.242 s</td><td class="num">0.0000 m</td></tr>
+</table>
+<p><b>My final gains: K<sub>p</sub> = 300, K<sub>i</sub> = 200, K<sub>d</sub> = 20.</b> Why:</p>
+<ul>
+<li><b>K<sub>p</sub> = 300</b> makes it fast (rise 0.15 s) and already leaves only a 6 % gap for I to clean up.</li>
+<li><b>K<sub>d</sub> = 20</b> gives ζ = 0.84: close to "just no bounce" (ζ = 1) while staying quick. Overshoot drops from 40.7 % to 0.7 %.</li>
+<li><b>K<sub>i</sub> = 200</b> removes the gap (0.0625 → 0.0000 m) while adding almost no overshoot (0.73 % → 0.49 %). A bigger K<sub>i</sub> = 1000 gave 19.0 % overshoot.</li>
+<li>I confirmed the choice with a small search over 120 gain combinations (K<sub>p</sub> 200–500, K<sub>i</sub> 100–1200, K<sub>d</sub> 15–40), keeping overshoot under 2.5 %.</li>
+</ul>
+<div class="box why"><b>Catch:</b> at the first instant this controller asks for <b>300 N</b> (K<sub>p</sub> × 1 m). A real motor cannot do that. Section 7 shows what happens with real limits.</div>
+
+<!-- ======================================================= 7 -->
+<h2><span class="n">7</span>Real-world problems (and fixes)</h2>
+<p>Each problem is shown <b>on its own</b> (other fixes off), so one cause gives one effect. Gains: 300 / 200 / 20.</p>
+<div class="box kw"><b>Key words.</b> <b>Saturation</b>: the motor is at its maximum and cannot push harder. <b>Windup</b>: the I part growing
+while the motor is saturated. <b>Noise</b>: small random errors in the sensor reading. <b>Low-pass filter</b>: smoothing that keeps slow changes and
+removes fast jitter. <b>Update interval T<sub>s</sub></b>: time between two controller updates (the dt the computer actually uses).</div>
+
+<h3>(a) Force limit of 30 N → integral windup</h3>
+<p><b>Simple idea.</b> The motor is maxed out at 30 N, so the block moves slower than the controller expects. Meanwhile the error stays big, so
+the I part keeps adding up ("winding up"). When the block finally reaches 1 m, the I part is far too large and pushes it past.</p>
+<div class="box eg"><b>Example:</b> a child pushes a stuck door harder and harder. When it suddenly opens, they stumble through.</div>
+<figure><img src="../figures/fig07a_windup.png" alt="Windup">
+<figcaption><b>Figure 7a.</b> Without a fix, the I part winds up to 57 N (only 20 N is needed): overshoot 11.2 %, settling 3.34 s. With anti-windup it stays at 20 N: overshoot 0.00 %, settling 2.06 s.</figcaption></figure>
+<p><b>Fix — anti-windup (clamping, also called conditional integration; one of several methods):</b> if the output is at its limit <i>and</i> the error would push it further the same way, stop adding to the integral.</p>
+<div class="box why"><b>Honest trade-off:</b> the fixed version first stalls near 0.95 m, then creeps up. Why: the I part was frozen at 0 while the motor was maxed out,
+so at first P alone holds the spring (like P-only: 0.9375 m); then I builds up to 20 N, which takes about (K<sub>p</sub> + k)/K<sub>i</sub> = 1.6 s.
+I also tried capping the I part at 30 N (3.2 % overshoot, 1.37 s) and "back-calculation" (0 %, 1.86 s); neither was clearly better.</div>
+
+<h3>(b) Noisy sensor (±1 mm) → jumpy D part</h3>
+<p><b>Simple idea.</b> D divides a <i>change</i> by a tiny time. Noise changes by about a millimetre every 1 ms, which looks like a speed of about 1 m/s.</p>
+<div class="formula">D noise ≈ K<sub>d</sub> × (√2 × 0.001 m) / 0.001 s ≈ 20 × 1.41 ≈ 28 N &nbsp;&nbsp; (simulation: 28.9 N)
+<small>Noise: random, standard deviation 1 mm, fixed seed so every run is identical. "std" = the typical size of the jitter.</small></div>
+<figure><img src="../figures/fig07b_noise.png" alt="Noise">
+<figcaption><b>Figure 7b.</b> Without a filter the force jitters by 29.1 N (std), swinging over a 189 N range. With a 10 ms filter: 2.2 N (14 N range). The block's own jitter is only about 0.1 mm (std) either way: the mass smooths out the fast force jumps.</figcaption></figure>
+<p><b>Fix — low-pass filter on D:</b> smooth it with an exponential moving average (a first-order low-pass filter), D<sub>new</sub> = α·D<sub>old</sub> + (1 − α)·D<sub>raw</sub>,
+α = τ/(τ + dt) = 0.01/0.011 = 0.91 (τ = 10 ms). <b>Cost:</b> settling 0.241 s → 0.277 s, because the brake reacts slightly later.
+<b>Example:</b> you don't stamp the brake at every flicker of the speedometer needle.</p>
+
+<h3>(c) Sudden target change → derivative "kick"</h3>
+<p><b>Simple idea.</b> If the target jumps by 1 m in one 1 ms step, the error jumps too. D sees a "speed" of 1 m ÷ 0.001 s = 1000 m/s and
+multiplies it by K<sub>d</sub> = 20: a <b>20,000 N</b> spike for one step.</p>
+<figure><img src="../figures/fig07c_kick.png" alt="Derivative kick">
+<figcaption><b>Figure 7c.</b> Target jumps 0 → 1 m at t = 0.5 s. D on the error: force spike 20,300 N, settling 1.25 s. D on the measurement: peak 300 N (all from P), settling 0.24 s.</figcaption></figure>
+<p><b>Fix — take D from the measurement:</b> use −dy/dt instead of de/dt. When the target is steady these are identical (e = r − y, so de/dt = −dy/dt),
+but a target jump does not move the block, so there is no spike. <span class="muted">(The kick does not appear at t = 0 because on its first
+step the controller has no previous value yet, so D starts at 0. That is why the jump is placed at 0.5 s.)</span></p>
+
+<h3>(d) The computer updates too slowly</h3>
+<p><b>Simple idea.</b> Between updates the controller holds its last push. A slow update means it reacts late, about half an update on
+average. Reacting late is like driving while looking at a photo taken a moment ago: you correct too late and swing past.</p>
+<figure><img src="../figures/fig07d_slow.png" alt="Slow update">
+<figcaption><b>Figure 7d.</b> Same gains: overshoot 0.5 % at 1 ms, 0.0 % at 30 ms, 9.0 % at 50 ms, 37.2 % at 70 ms, and unstable at 80 ms (swings grow forever). Right: softer gains (100/100/8) bring 70 ms back to 0.0 %, settling 0.63 s.</figcaption></figure>
+<p><b>Fix:</b> update faster. A common rule of thumb: at least 10 updates per rise time (rise 0.15 s → dt ≤ 15 ms). It is a starting point, not a guarantee: the safe interval also depends on the gains, delays and how fast the system moves. If the hardware cannot, use softer gains (slower but safe).</p>
+
+<!-- ======================================================= 8 -->
+<h2><span class="n">8</span>Choosing the gains</h2>
+<h3>Tuning by hand, step by step (what I did in Sections 5–6)</h3>
+<ol>
+<li>Start with K<sub>i</sub> = K<sub>d</sub> = 0. Raise K<sub>p</sub> until the response is fast but bounces a bit (K<sub>p</sub> = 300: rise 0.07 s, 40.7 % overshoot).</li>
+<li>Raise K<sub>d</sub> until the bounce is almost gone (K<sub>d</sub> = 20: 0.7 %). If the output gets noisy, add the D filter.</li>
+<li>Add K<sub>i</sub> slowly until the leftover gap disappears in a reasonable time, without new overshoot (K<sub>i</sub> = 200).</li>
+<li>Test with real limits: force limit, noise, slower update. Back off any gain that causes trouble.</li>
+</ol>
+<h3>Ziegler–Nichols recipe on a second system, G(s) = 1/(s + 1)³</h3>
+<p><b>Simple idea.</b> Find the P gain where the system is "on the edge" — it swings forever with the same size — then use a table to turn that
+into PID gains. <b>Example:</b> pushing a child on a swing exactly hard enough that the swing height stays the same.
+(This system is like three slow buckets in a row, each filling from the one before; s means "rate of change".)</p>
+<div class="box kw"><b>Key words.</b> <b>Ultimate gain K<sub>u</sub></b>: the P gain where the system swings steadily forever.
+<b>Ultimate period P<sub>u</sub></b>: the time between two peaks of that swing [s]. <b>T<sub>i</sub>, T<sub>d</sub></b>: the recipe's "integral time" and
+"derivative time" [s]; they convert to our gains by K<sub>i</sub> = K<sub>p</sub>/T<sub>i</sub>, K<sub>d</sub> = K<sub>p</sub>·T<sub>d</sub>.</div>
+<p><b>Step 1 — P only, raise K<sub>p</sub>.</b> Swing size ratio (last swing ÷ second swing): K<sub>p</sub> = 6 → 0.014 (dies out),
+7 → 0.131, 8 → 1.135 (grows), 9 → 9.36. Halving the range between 7 and 9 fourteen times gives
+<b>K<sub>u</sub> = 7.94</b> and <b>P<sub>u</sub> = 3.640 s</b>. Theory: the phase of 1/(jω + 1)³ is −180° when ω = √3 rad/s, where the size is 1/8, so
+K<sub>u</sub> = 8 and P<sub>u</sub> = 2π/√3 = 3.628 s. The 0.75 % gap is the late-reaction effect of the 5 ms update (Section 7d). Check: repeating the search with 20 / 10 / 5 / 2 / 1 ms updates gives K<sub>u</sub> = 7.77 / 7.88 / 7.94 / 7.98 / 7.99, moving toward 8 as updates get faster.</p>
+<figure><img src="../figures/fig08a_ku.png" alt="Finding Ku">
+<figcaption><b>Figure 8a.</b> Below K<sub>u</sub> the swings shrink, at K<sub>u</sub> = 7.94 they stay the same size (peaks 3.64 s apart), above it they grow.</figcaption></figure>
+<div class="two">
+<div><p><b>Step 2 — apply the table.</b></p>
+<table>
+<tr><th>Type</th><th class="num">K<sub>p</sub></th><th class="num">T<sub>i</sub></th><th class="num">T<sub>d</sub></th></tr>
+<tr><td>P</td><td class="num">0.5 K<sub>u</sub></td><td class="num">–</td><td class="num">–</td></tr>
+<tr><td>PI</td><td class="num">0.45 K<sub>u</sub></td><td class="num">P<sub>u</sub>/1.2</td><td class="num">–</td></tr>
+<tr class="best"><td>PID</td><td class="num">0.6 K<sub>u</sub></td><td class="num">P<sub>u</sub>/2</td><td class="num">P<sub>u</sub>/8</td></tr>
+</table>
+<p class="small">With K<sub>i</sub> = K<sub>p</sub>/T<sub>i</sub> and K<sub>d</sub> = K<sub>p</sub>·T<sub>d</sub>:
+<b>K<sub>p</sub> = 4.76, K<sub>i</sub> = 2.62, K<sub>d</sub> = 2.17.</b></p></div>
+<div><p><b>Step 3 — plot and improve.</b></p>
+<table>
+<tr><th>Gains</th><th class="num">Overshoot</th><th class="num">Settling</th></tr>
+<tr><td>Z–N (4.76 / 2.62 / 2.17)</td><td class="num">52.3 %</td><td class="num">9.9 s</td></tr>
+<tr class="best"><td>Improved PID (4.0 / 0.8 / 3.0)</td><td class="num">3.1 %</td><td class="num">3.4 s</td></tr>
+</table>
+<p class="small">Z–N aims for each swing to be ¼ of the last one, so ~50 % overshoot is expected. I cut K<sub>i</sub> by 3× (I was pushing too long
+during the slow rise), raised K<sub>d</sub> for more braking, and lowered K<sub>p</sub> a little.</p></div>
+</div>
+<figure><img src="../figures/fig08b_zn.png" alt="ZN result">
+<figcaption><b>Figure 8b.</b> Z–N is a good starting point (stable, zero final error) but bouncy: overshoot 52 % → 3.1 % and settling 9.9 s → 3.4 s after hand tuning.</figcaption></figure>
+
+<!-- ======================================================= 9 -->
+<h2><span class="n">9</span>The code</h2>
+<p><b>Simple idea.</b> One reusable <code>PID</code> class (<code>pid_control/pid.py</code>) holds the gains and its memory (integral, previous values).
+You call <code>update(target, measurement)</code> once every dt and it returns the force. Every Section 7 fix is a switch. Core of <code>update()</code>:</p>
+<pre>error = setpoint - measurement                               # 1. how far are we?
+p_term = self.kp * error                                     # 2. P: push in proportion to the gap
+if self.prev_error is None:   d_raw = 0.0                    # 3. D: no previous value on the first step
+elif self.d_on_measurement:   d_raw = -(measurement - self.prev_meas) / dt   # fix (c): no kick
+else:                         d_raw = (error - self.prev_error) / dt
+alpha = self.d_filter_tau / (self.d_filter_tau + dt)         # fix (b): smooth D (alpha = 0 -> no filter)
+self.d_filtered = alpha * self.d_filtered + (1 - alpha) * d_raw
+d_term = self.kd * self.d_filtered
+new_integral = self.integral + error * dt                    # 4. I: add one rectangle of area
+u_unclipped = p_term + self.ki * new_integral + d_term       # 5. add the three parts
+u = clip(u_unclipped, self.u_min, self.u_max)                # fix (a): motor limit, e.g. +/-30 N
+if not (self.anti_windup and u != u_unclipped and sign(error) == sign(u_unclipped)):
+    self.integral = new_integral                             # fix (a): anti-windup - only grow I if allowed
+self.prev_error, self.prev_meas = error, measurement         # 6. remember for next time
+return u</pre>
+<p><b>Using it</b> with all fixes on, in a realistic test: 30 N motor, 1 mm sensor noise, target 1 m, then a sudden jump to 0.5 m at t = 5 s:</p>
+<pre>pid = PID(kp=300, ki=200, kd=20, dt=0.001, u_min=-30, u_max=30,
+          anti_windup=True, d_filter_tau=0.01, d_on_measurement=True)
+log = simulate(MassSpringDamper(), pid, target, t_end=8.0, noise_std=0.001, seed=1)</pre>
+<p><b>Output</b> (printed by <code>experiments/section09_full_demo.py</code>):</p>
+<pre>  t [s]  target  measured    error     P [N]    I [N]    D [N]    u [N]
+  0.000    1.00    0.0003   0.9997    299.90     0.00     0.00    30.00   &lt;- P wants 300 N, motor gives 30
+  0.200    1.00    0.3235   0.6765    202.95     0.00   -48.92    30.00   &lt;- I frozen (anti-windup), D braking
+  1.000    1.00    0.9603   0.0397     11.90     8.02    -1.09    18.84   &lt;- I building up towards 20 N
+  4.000    1.00    0.9950   0.0050      1.51    18.37    -0.79    19.10
+  5.000    0.50    0.9981  -0.4981   -149.44    19.17    -1.84   -30.00   &lt;- target jumps: no D spike
+  8.000    0.50    0.5036  -0.0036     -1.09    10.62    -2.84     6.69   &lt;- I heading to 10 N (= k x 0.5 m)</pre>
+<figure><img src="../figures/fig09_full_demo.png" alt="Full demo">
+<figcaption><b>Figure 9.</b> Same gains, same 30 N motor and noise. With all fixes: overshoot 0.04 % (step 1) and 0.01 % (step 2), force jitter 2.1 N.
+Naive PID: overshoot 6.2 % and 0.3 %, force jitter 15.1 N, often slamming between +30 and −30 N.</figcaption></figure>
+
+<!-- ======================================================= 10 -->
+<h2><span class="n">10</span>Real robots &amp; common myths</h2>
+<table>
+<tr><th style="width:17%">Where</th><th style="width:22%">What is controlled</th><th>How PID is used</th></tr>
+<tr><td>Motor speed (fans, conveyor belts, wheels)</td><td>speed from an encoder</td><td>Usually PI: I removes the speed gap caused by load and friction. Output = motor voltage, limited by the supply → anti-windup needed.</td></tr>
+<tr><td>Drone</td><td>roll, pitch, yaw angle and rotation rate</td><td>Cascaded PIDs: an outer angle loop sets a target rate for a fast inner rate loop (hundreds of updates per second). The gyro is noisy, so the D part is filtered (Section 7b).</td></tr>
+<tr><td>Robot arm</td><td>each joint angle</td><td>One PID per joint, often plus a "feedforward" term that adds the torque needed to hold the arm against gravity, just like our 20 N spring force, so I has less to do.</td></tr>
+<tr><td>Line-following robot</td><td>sideways distance from the line (IR sensors)</td><td>Mostly PD: error = how far the line is from the centre; output = difference in left/right wheel speed. D stops it zig-zagging.</td></tr>
+<tr><td>Car cruise control</td><td>vehicle speed</td><td>PI on speed → throttle. On a steep hill the throttle maxes out, so anti-windup stops a surge when the road flattens (Section 7a).</td></tr>
+</table>
+<table>
+<tr><th style="width:30%">Myth</th><th>Reality (with evidence from this document)</th></tr>
+<tr><td>"Higher gains always make it better."</td><td>K<sub>p</sub> 10 → 300 cut the gap but overshoot rose 0.1 % → 40.7 % (Fig. 5a); with a slow 80 ms update the same gains go unstable (Fig. 7d).</td></tr>
+<tr><td>"A big enough K<sub>p</sub> removes the error."</td><td>The error is 20/(K<sub>p</sub> + 20): smaller, never zero (0.063 m even at K<sub>p</sub> = 300). Only I removes it.</td></tr>
+<tr><td>"D reduces noise / more D is always calmer."</td><td>D <i>amplifies</i> noise: 1 mm of noise → 29 N of force jitter (Fig. 7b). And with I present, raising K<sub>d</sub> from 20 to 40 actually raised overshoot from 0.5 % to 2.8 %: the slower rise lets I collect more error.</td></tr>
+<tr><td>"Adding I is free."</td><td>I removes the gap but adds bounce (20 % → 49 % at K<sub>i</sub> = 500, Fig. 5b) and winds up at force limits (57 N instead of 20 N, Fig. 7a).</td></tr>
+<tr><td>"Ziegler–Nichols gives the final answer."</td><td>It gave 52 % overshoot; hand tuning cut it to 3.1 % (Fig. 8b). It is a starting point.</td></tr>
+<tr><td>"PID needs an exact model of the machine."</td><td>Z–N tuning used only experiments (raise K<sub>p</sub>, watch the swings). Models help, but PID works without one, which is why it is so widely used in industry.</td></tr>
+</table>
+
+<!-- ======================================================= wrap-up -->
+<h2>What worked, what didn't, what I'd explore next</h2>
+<div class="two">
+<div class="box ok"><b>What worked</b><ul style="margin-bottom:0">
+<li>Hand calculations matched the simulation: stopping point to 4 decimals, overshoot within 0.6 points, K<sub>u</sub> within 0.75 %.</li>
+<li>Each Section 7 fix gave a large, measurable gain (e.g. 20,300 N → 300 N peak force; 29 N → 2.2 N jitter).</li>
+<li>Finding K<sub>u</sub> automatically by halving the range was reliable and repeatable.</li>
+<li>Every graph and number is regenerated by one command, identical on every run (fixed random seed).</li></ul></div>
+<div class="box why"><b>What didn't (or not fully)</b><ul style="margin-bottom:0">
+<li>Anti-windup removes overshoot but leaves a slow creep (settling 2.06 s vs 0.24 s without a limit); two alternatives were not clearly better.</li>
+<li>The D filter costs a little speed (0.241 → 0.277 s).</li>
+<li>I had no simple formula for PID overshoot (I adds a third "memory" state), so for PI/PID I relied on simulation, not theory.</li>
+<li>Z–N needed a lot of hand fixing (52 % overshoot).</li></ul></div>
+</div>
+<p><b>Next:</b> (1) add <b>feedforward</b> (push k·r = 20 N straight away) so I only fixes small errors; (2) test <b>robustness</b>: mass or spring ±50 %;
+(3) try <b>relay auto-tuning</b>, a safer way to find K<sub>u</sub> on real hardware; (4) run the same code on a real DC motor with an encoder.</p>
+
+<h2>How I used AI tools</h2>
+<p>I used Claude (Anthropic) as a writing assistant: to draft the simulator, the PID class, to check my derivations, and to suggest clear
+wording. I then ran every script myself, checked each result against the hand calculations shown above, and adjusted gains and explanations.
+Used chatgpt to verify my work. All numbers in this document come from my code's output.</p>
+<p class="small muted"><b>References:</b> K. J. Åström &amp; R. M. Murray, <i>Feedback Systems</i>, Princeton (2008) · K. J. Åström &amp; T. Hägglund,
+<i>Advanced PID Control</i>, ISA (2006) · J. G. Ziegler &amp; N. B. Nichols, "Optimum settings for automatic controllers", <i>Trans. ASME</i> 64 (1942) ·
+B. Beauregard, "Improving the Beginner's PID" (blog series, 2011).</p>
+
+</body>
+</html>

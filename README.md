@@ -1,4 +1,4 @@
-# PID Control from Zero
+# PID Control from Scratch
 
 A beginner's guide to PID control, with every graph and every number made by my own Python code.
 

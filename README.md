@@ -2,7 +2,7 @@
 
 A beginner's guide to PID control, with every graph and every number made by my own Python code.
 
-- **Guide:** [`PID_Control_Guide.pdf`](PID_Control_Guide.pdf) (13 pages)
+- **Guide:** [`documents/PID_Control_Guide.pdf`](documents/PID_Control_Guide.pdf) (13 pages)
 - **Code:** NumPy + Matplotlib only. The PID controller and the simulator (RK4 integration) are written by hand. No control libraries (no `python-control`, `scipy.signal` or `simple-pid`).
 - **Reproducible:** all random noise uses fixed seeds, so every run gives exactly the same figures and numbers.
 
@@ -65,6 +65,8 @@ PID/
 │   └── section01_*.py … section09_*.py
 ├── figures/                  all graphs (made by the scripts)
 ├── results/                  the numbers quoted in the PDF, as JSON
+├── documents/
+│   └── PID_Control_Guide.pdf   the guide (13 pages)
 ├── run_all.py
 └── requirements.txt
 ```

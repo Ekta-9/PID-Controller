@@ -65,10 +65,6 @@ PID/
 │   └── section01_*.py … section09_*.py
 ├── figures/                  all graphs (made by the scripts)
 ├── results/                  the numbers quoted in the PDF, as JSON
-├── docs/
-│   ├── pid_guide.html          source of the PDF
-│   └── build_pdf.py            HTML → PDF
-├── PID_Control_Guide.pdf
 ├── run_all.py
 └── requirements.txt
 ```
